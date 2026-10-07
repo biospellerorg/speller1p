@@ -1,0 +1,2 @@
+inherits: default.yaml
+sweep: {fusion.strategy: [log_pool, linear_pool], fusion.alpha: [0.5, 1.0, 1.5]}

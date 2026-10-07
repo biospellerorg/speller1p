@@ -1,0 +1,2 @@
+inherits: default.yaml
+experiment: {participants: 10, task_ids: [T001, T002], output: runs/compare_llm}

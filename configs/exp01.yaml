@@ -1,0 +1,2 @@
+inherits: default.yaml
+bench: {task_file: data/tasks_ru.txt}

@@ -1,0 +1,2 @@
+inherits: default.yaml
+sweep: {slow_llm.trigger: [word_end, sentence_end], slow_llm.window_words: [1, 3, 5]}

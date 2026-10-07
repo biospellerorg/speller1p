@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Experiment artifacts may contain participant text and must stay local.
+runs/
+data/corpus_ru.txt

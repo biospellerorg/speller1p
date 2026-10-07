@@ -1,0 +1,50 @@
+seed: 20260929
+participant_id: SIM-001
+experiment_id: null
+task_id: T001
+run_mode: simulate
+mode: {llm: 'on'}
+repertoire:
+  symbols: [а, б, в, г, д, е, ж, з, и, й, к, л, м, н, о, п, р, с, т, у, ф, х, ц, ч, ш, щ, ъ, ы, ь, э, ю, я, ' ', '.', ',', '⌫']
+  merge_yo: true
+  layout: [6, 6]
+distributions: {floor_eps: 0.000001}
+physiology:
+  plugin: simulated
+  output_semantics: likelihood
+  sim: {d_prime: 1.0, adjacency_leak: 0.0}
+user: {lapse_rate: 0.02, policy: no_correction}
+stimulus: {paradigm: row_column, flash_ms: 100, isi_ms: 80, pause_ms: 2500}
+epoch: {n_repetitions: 10}
+runtime: {realtime: false, max_symbols: null}
+llm: {allow_remote: false}
+fast_llm:
+  backend: mock_ngram
+  model_id: mock-ngram-5
+  device: cpu
+  context_source: primary
+  char_marginal: {depth: 2, beam: 64, backspace_prob: 0.02}
+  mock: {order: 5, discount: 0.75}
+word_prediction: {n_max: 10, min_prefix: 0}
+fusion: {strategy: log_pool, alpha: 1.0, beta: 1.0, lambda: 0.5}
+detector: {mode: label, tau: 0.5, max_retries: 1, cold_start_symbols: 5}
+presentation_feedback: {k_max: 5, mass: 0.9, send_posterior: false}
+slow_llm:
+  backend: mock_dictionary
+  model_id: mock-dictionary-1
+  prompt_file: prompts/correction.txt
+  temperature: 0
+  include_alternatives: false
+  trigger: word_end
+  window_words: 3
+  min_context_words: 1
+  strict_word_count: true
+  base_url: http://127.0.0.1:11434/v1
+  prompt_file_local: prompts/correction_local.txt
+  timeout_s: 30
+  mock: {max_edit: 2, same_row_col_cost: 0.5}
+rl: {enabled: true, mode: broadcast_only, min_labels: 100}
+metrics:
+  normalization: default
+  semantic: {judge: chrf_stub, chrf_threshold: 0.7}
+stats: {confidence: 0.95, bootstrap_n: 10000}

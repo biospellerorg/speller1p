@@ -1,0 +1,2 @@
+inherits: default.yaml
+sweep: {epoch.n_repetitions: [3, 5, 10], stimulus.isi_ms: [20, 80, 150]}
