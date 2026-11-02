@@ -1,4 +1,4 @@
-"""Speller side of the ``speller-link@1`` protocol (see stimulus_kit/speller_link.py).
+"""Speller side of the ``speller-link@2`` protocol (see stimulus_kit/speller_link.py).
 
 The core publishes commands and receives two kinds of messages:
 - ``stimuli``: flash markers / "done" events from stimulus modules (logged only);
@@ -15,7 +15,7 @@ import queue
 import threading
 import time
 
-PROTOCOL = "speller-link@1"
+PROTOCOL = "speller-link@2"
 CONTROL_STREAM = "SpellerControl"
 STIMULI_STREAM = "SpellerStimuli"
 LIKELIHOOD_STREAM = "SpellerLikelihood"
@@ -28,6 +28,7 @@ class Incoming:
     lsl_time: float      # sender timestamp mapped to this computer's LSL clock
     source: str          # source_id of the sending stream
     module: str          # module name declared by the sender
+    recv_time: float = 0.0   # when the speller pulled the message, same LSL clock
 
 
 class MemoryTransport:
@@ -44,7 +45,11 @@ class MemoryTransport:
             listener(msg)
 
     def deliver(self, kind: str, msg: dict, lsl_time: float | None = None, module: str = "test") -> None:
-        self.inbox.put(Incoming(kind, msg, time.monotonic() if lsl_time is None else lsl_time, module, module))
+        now = time.monotonic()
+        self.inbox.put(Incoming(kind, msg, now if lsl_time is None else lsl_time, module, module, now))
+
+    def now(self) -> float:
+        return time.monotonic()
 
     def poll(self, timeout: float) -> list[Incoming]:
         out = []
@@ -95,6 +100,10 @@ class LSLTransport:
     def consumers(self) -> bool:
         return self.outlet is not None and self.outlet.have_consumers()
 
+    def now(self) -> float:
+        """This computer's LSL clock (the clock of EEG samples and flash markers)."""
+        return self.lsl.local_clock()
+
     # ------------------------------------------------------------- incoming
     def _attach(self):
         for kind, resolver in self.resolvers.items():
@@ -132,6 +141,7 @@ class LSLTransport:
                     with self.lock:
                         self.inlets.pop(sid, None)
                     continue
+                received = self.lsl.local_clock() if samples else 0.0
                 for sample, stamp in zip(samples, stamps):
                     idle = False
                     try:
@@ -142,7 +152,7 @@ class LSLTransport:
                         continue
                     entry["messages"] += 1
                     entry["last"] = time.monotonic()
-                    self.inbox.put(Incoming(entry["kind"], msg, float(stamp), sid, entry["module"]))
+                    self.inbox.put(Incoming(entry["kind"], msg, float(stamp), sid, entry["module"], received))
             if idle:
                 time.sleep(0.002)
 

@@ -74,7 +74,14 @@ def build_tables(session_dir):
                 row["t_start_ns"] = event["t_ns"]
             elif typ == "physiology_observation":
                 row["phys_log_p"] = payload["log_p"]
-                row["binary_flash_accuracy"] = payload.get("module_metrics", {}).get("binary_flash_accuracy")
+                row["binary_flash_accuracy"] = (payload.get("module_metrics") or {}).get("binary_flash_accuracy")
+                if "raw" in payload:                 # last update as the module sent it
+                    row["phys_raw"] = payload["raw"]
+                    row["phys_updates"] = payload.get("update")
+            elif typ == "epoch_timeline":
+                row["t_epoch_start_lsl"] = payload["lsl_s"].get("epoch_start_lsl")
+                row.update({f"t_{k}": v for k, v in payload["since_epoch_start_ms"].items()})
+                row["n_flashes"] = payload.get("flashes")
             elif typ == "prior_computed":
                 row["prior_log_p"] = payload["log_p"]
                 row["prior_latency_ms"] = payload.get("wall_latency_ms")
@@ -84,6 +91,7 @@ def build_tables(session_dir):
                 row.update(payload["params"])
             elif typ == "symbol_decided":
                 row.update({"decided": payload["symbol"], **{k: payload[k] for k in ("confidence", "margin", "uncertain", "cold_start", "abstained")}})
+                row.update({k: payload.get(k) for k in ('target_symbol', 'target_position', 'correct', 'n_symbols')})
                 row["t_end_ns"] = event["t_ns"]
             elif typ == "presentation_feedback":
                 row["top_k_feedback"] = payload["top_k"]
@@ -102,7 +110,8 @@ def build_tables(session_dir):
 
 def write_csv(path, rows):
     fields = sorted({key for row in rows for key in row})
-    with path.open("w", encoding="utf-8", newline="") as fh:
+    # utf-8 with BOM: Excel on Windows otherwise reads Cyrillic as cp1251.
+    with path.open("w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         for row in rows:

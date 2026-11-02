@@ -9,7 +9,7 @@ and publishes ``SpellerLikelihood`` updates after every scored flash.
 Swap it for the physiologists' own decoder at any time: the speller only reads
 ``SpellerLikelihood``.
 
-    python stimulus_kit/decoders/p300_lsl_decoder.py --profile configs/gui_lsl.yaml --eeg-name EDFReplayEEG
+    python stimulus_kit/decoders/p300_lsl_decoder.py --profile configs/p300_decoder.yaml --eeg-name EDFReplayEEG
 """
 import argparse
 import json
@@ -78,7 +78,7 @@ class FlashCollector:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--profile", type=Path, default=ROOT / "configs" / "gui_lsl.yaml",
+    ap.add_argument("--profile", type=Path, default=ROOT / "configs" / "p300_decoder.yaml",
                     help="YAML with a physiology block (channels, filters, model_path, source)")
     ap.add_argument("--eeg-name", help="LSL EEG stream name (overrides the profile's source)")
     ap.add_argument("--model", type=Path, help="calibrated P300 model JSON (overrides model_path)")
@@ -113,6 +113,11 @@ def main():
 
 def decode_step(link, eid, st, collector, source, features, model):
     flashes, done = collector.get(eid)
+    if link.epoch_cancelled(eid):
+        st['final'] = True
+        return
+    if link.epoch is None or link.epoch.id != eid:
+        return
     if st["logits"] is None:
         symbols = link.epoch.symbols if link.epoch else sorted({s for _, f in flashes for s in f})
         st["logits"] = {s: 0.0 for s in symbols}
@@ -123,7 +128,7 @@ def decode_step(link, eid, st, collector, source, features, model):
             continue
         window = source.window(onset, features.window)
         if window is None:
-            continue                                  # post-stimulus EEG not here yet
+            break                                     # preserve a contiguous evidence watermark
         x = features.extract(window, source.fs)
         scores[i] = None if x is None else model.llr(x)
         if scores[i] is not None:
@@ -135,8 +140,8 @@ def decode_step(link, eid, st, collector, source, features, model):
     if changed or complete:
         top = max(logits.values())
         p = {s: float(np.exp(v - top)) for s, v in logits.items()}
-        usable = any(v is not None and v > 0 for v in scores.values())
-        link.send_likelihood(p, final=complete, epoch=eid, usable=usable,
+        usable = any(v is not None for v in scores.values())
+        link.send_likelihood(p, final=complete, epoch=eid, usable=usable, through_flash=len(scores),
                              info={"flashes_scored": sum(v is not None for v in scores.values()),
                                    "flashes_rejected": sum(v is None for v in scores.values())})
     st["final"] = complete
