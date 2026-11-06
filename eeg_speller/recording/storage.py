@@ -18,9 +18,39 @@ def read_events(session_dir):
         return [json.loads(line) for line in fh]
 
 
+def spelling_dataset(cfg, replay_manifest=None):
+    """Dataset label written on every new spelling session.
+
+    Simulation is ``simulated``. Replay copies the source session when it has
+    one. A live recording uses the name the operator supplied; programmatic
+    callers that omit it are labeled ``live``.
+    """
+    raw = cfg.model_dump().get("dataset") if hasattr(cfg, "model_dump") else None
+    if cfg.run_mode == "replay":
+        src = (replay_manifest or {}).get("dataset") if isinstance(replay_manifest, dict) else None
+        src = src if isinstance(src, dict) else {}
+        return {"name": src.get("name") or "replay",
+                "subject": src.get("subject") or cfg.participant_id,
+                "role": "spelling",
+                "label_source": src.get("label_source") or "none"}
+    if isinstance(raw, dict) and raw.get("name"):
+        label = raw.get("label_source")
+        if label not in ("none", "ground_truth", "simulated"):
+            label = "simulated" if cfg.run_mode == "simulate" else "none"
+        return {"name": str(raw["name"]), "subject": str(raw.get("subject") or cfg.participant_id),
+                "role": "spelling", "label_source": label}
+    if cfg.run_mode == "simulate":
+        return {"name": "simulated", "subject": cfg.participant_id,
+                "role": "spelling", "label_source": "simulated"}
+    if cfg.run_mode == "live":
+        return {"name": "live", "subject": cfg.participant_id,
+                "role": "spelling", "label_source": "none"}
+    raise ValueError("dataset name is required to start a session")
+
+
 class SessionStorage:
     """Storage; NEED-F-12/14; DATA_MODEL; Q-30."""
-    def __init__(self, root: Path, cfg, rep, models: dict, replay_of=None):
+    def __init__(self, root: Path, cfg, rep, models: dict, replay_of=None, replay_manifest=None):
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.session_id = f"{stamp}_{cfg.participant_id}_{cfg.run_mode}_{uuid.uuid4().hex[:4]}"
         self.directory = Path(root)
@@ -39,7 +69,8 @@ class SessionStorage:
                          "seed": cfg.seed, "code_version": "0.1.0", "models": models,
                          "hardware": {"platform": platform.platform(), "cpu": platform.processor(),
                                       "gpu": None, "audio_device": None},
-                         "replay_of": replay_of, "counts": {}, "status": "running"}
+                         "replay_of": replay_of, "counts": {}, "status": "running",
+                         "dataset": spelling_dataset(cfg, replay_manifest)}
         (self.directory / "session.json").write_text(json.dumps(self.manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         (self.directory / "config.yaml").write_text(yaml.safe_dump(cfg.model_dump(), allow_unicode=True, sort_keys=False), encoding="utf-8")
         (self.directory / "external" / "refs.json").write_text("[]\n", encoding="utf-8")
@@ -122,19 +153,44 @@ def write_csv(path, rows):
 def check_integrity(session_dir):
     session_dir = Path(session_dir)
     events = read_events(session_dir)
+    manifest = json.loads((session_dir / "session.json").read_text(encoding="utf-8"))
+    dataset = manifest.get("dataset") if isinstance(manifest.get("dataset"), dict) else {}
     errors = []
     if [e["seq"] for e in events] != list(range(len(events))):
         errors.append("non-contiguous event sequence")
     if not events or events[-1]["type"] != "session_ended":
         errors.append("missing session_ended")
     epochs = {e["epoch_id"] for e in events if e["type"] == "epoch_started"}
+    imported = dataset.get("role") == "import"
+    if imported:
+        for key in ("name", "subject", "role", "label_source"):
+            if not dataset.get(key):
+                errors.append(f"dataset.{key} is required")
+        has_signal = (session_dir / "external" / "physiology" / "lsl_eeg.npz").is_file()
+        if has_signal:
+            for key in ("fs", "channels", "unit", "window_s"):
+                if key not in dataset:
+                    errors.append(f"dataset.{key} is required when lsl_eeg.npz is present")
+        labeled = dataset.get("label_source") in ("ground_truth", "simulated")
+        for event in events:
+            if event["type"] != "stimulus_event":
+                continue
+            payload = event["payload"]
+            if has_signal and ("onset_sample" not in payload or "n_samples" not in payload):
+                errors.append(f"flash {event['epoch_id']}/{payload.get('flash_idx')} missing onset_sample")
+                break
+            if labeled and "is_target" not in payload:
+                errors.append(f"flash {event['epoch_id']}/{payload.get('flash_idx')} missing is_target")
+                break
     for eid in epochs:
         types = {e["type"] for e in events if e["epoch_id"] == eid}
         if "epoch_aborted" in types:
             continue
-        for required in ("epoch_started", "physiology_observation", "posterior_computed", "symbol_decided"):
-            if required not in types:
-                errors.append(f"epoch {eid} missing {required}")
+        required = ("epoch_started",) if imported else (
+            "epoch_started", "physiology_observation", "posterior_computed", "symbol_decided")
+        for kind in required:
+            if kind not in types:
+                errors.append(f"epoch {eid} missing {kind}")
     requested = {e["payload"]["correction_id"] for e in events if e["type"] == "correction_requested"}
     completed = {e["payload"]["correction_id"] for e in events if e["type"] == "correction_completed"}
     if requested != completed:

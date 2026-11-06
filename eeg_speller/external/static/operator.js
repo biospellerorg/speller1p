@@ -254,6 +254,7 @@ async function start() {
     const v = $("task").value;
     body = {
       participant_id: $("participant").value.trim(),
+      dataset: $("dataset").value.trim(),
       task: v === "free" ? { kind: "free" } : v === "custom" ? { kind: "custom", text: $("custom").value } : { kind: "task", id: v },
       llm_on: true,
       physiology: { program: $("program").value },
