@@ -67,6 +67,7 @@ runs/
 | `replay_of` | str \| null | `session_id` исходной сессии для режима replay |
 | `counts` | object | число эпох, событий, исправлений; заполняется при закрытии |
 | `status` | str | `completed` \| `aborted` \| `crashed` |
+| `dataset` | object | обязательно у сессий, записанных этой версией кода. Всегда: `name`, `subject`, `role` (`spelling` \| `import`), `label_source` (`none` \| `ground_truth` \| `simulated`). Если в каталоге есть `lsl_eeg.npz`: `fs`, `channels`, `unit` (`V` \| `uV` \| `unknown`), `window_s`. `split`, `source_path`, `concatenated_epochs` пишутся только когда это факт записи. Старые журналы без блока остаются читаемыми |
 
 ## 5. Общая оболочка события
 
@@ -116,8 +117,8 @@ runs/
 
 | Тип | Блок | Payload |
 |---|---|---|
-| `epoch_started` | One Epoch | `position`, `repertoire_hash`, `paradigm`, `flash_ms`, `isi_ms`, `pause_ms`, `n_repetitions`, `retry_idx`, `sim_target_symbol` |
-| `stimulus_event` | Presentation Method | `rep`, `flash_idx`, `group` (индексы символов), `onset_t_ns`, `duration_ms`, `sim_is_target` |
+| `epoch_started` | One Epoch | `position`, `repertoire_hash`, `paradigm`, `flash_ms`, `isi_ms`, `pause_ms`, `n_repetitions`, `retry_idx`, `sim_target_symbol`. Импорт публичной записи: `target_symbol`, если эпоха — один задуманный символ; `source_index` — номер строки в исходном файле Самары. Настоящая цель не пишется в `sim_target_symbol` |
+| `stimulus_event` | Presentation Method | `rep`, `flash_idx`, `group` (индексы символов), `onset_t_ns`, `duration_ms`, `sim_is_target`. Импорт: `is_target`, когда метка известна; `onset_sample` и `n_samples`, когда рядом лежит npz; `kind` и `index` для клетки сетки; `stimulus_code` для кодов BCI 1–12. У сырой Самары кода нет |
 | `physiology_observation` | EEG / EOG source | `log_p[36]`, `semantics`, `source` (`simulated` + параметры d′, λ), `per_repetition` (опц.), `module_metrics` (опц.), `t_module_ns` (опц.), `sim_flash_scores` (опц., матрица n_rep × F) |
 | `presentation_feedback` | Influence on presentation method | `decided`, `top_k` ([символ, p]) |
 | `presentation_feedback_received` | Presentation Method | `action` (`logged_ignored` в симуляции) |
@@ -203,7 +204,8 @@ runs/
 
 Перед упаковкой выполняется проверка полноты:
 - `seq` идёт без пропусков;
-- у каждой эпохи есть `epoch_started`, `physiology_observation`, `posterior_computed`, `symbol_decided`;
+- у каждой эпохи набора (`dataset.role: spelling`, а также старые сессии без блока `dataset`) есть `epoch_started`, `physiology_observation`, `posterior_computed`, `symbol_decided`;
+- у импорта (`dataset.role: import`) достаточно `epoch_started` и `session_ended`. Если в каталоге есть `lsl_eeg.npz`, у каждой вспышки есть `onset_sample` и `n_samples`, а в `dataset` есть `fs`, `channels`, `unit`, `window_s`. При `label_source` `ground_truth` или `simulated` у каждой вспышки есть `is_target`. Импорт без этих полей — бракованная сессия;
 - у каждого `correction_requested` есть `correction_completed`;
 - число символов в `primary_final.txt` согласовано с событиями `primary_text_updated`;
 - `session_ended` присутствует.

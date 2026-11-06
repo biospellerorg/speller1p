@@ -189,8 +189,12 @@ class Manager:
                 raise ValueError("stop the running session first")
             task_id, target = resolve_task(body.get("task") or {"kind": "free"})
             participant = check_identifier(body.get("participant_id"), "participant_id")
+            dataset_name = check_identifier(body.get("dataset"), "dataset")
             cfg, passport = build_session_config(body)
-            cfg = cfg.model_copy(update={"participant_id": participant, "task_id": task_id})
+            cfg = cfg.model_copy(update={
+                "participant_id": participant, "task_id": task_id,
+                "dataset": {"name": dataset_name, "subject": participant, "role": "spelling",
+                            "label_source": "ground_truth" if target else "none"}})
             phys = body.get("physiology") or {}
             program = phys.get("program") or ""
             info = None

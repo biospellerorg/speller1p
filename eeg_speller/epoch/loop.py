@@ -71,7 +71,8 @@ class EpochRunner:
                   "slow_llm": _model_info(self.slow, cfg.slow_llm["backend"]) if self.slow else {"backend": "disabled", "model_id": "disabled", "version": "1", "hash": "none"},
                   "physiology": {"backend": cfg.physiology["plugin"] if source is None else "replay", "model_id": cfg.physiology["plugin"], "version": "1", "hash": hashlib.sha256(json.dumps(cfg.physiology, sort_keys=True).encode()).hexdigest()}}
         self.storage = SessionStorage(Path(root), cfg, self.rep, models,
-                                      source.manifest["session_id"] if source is not None else None)
+                                      source.manifest["session_id"] if source is not None else None,
+                                      source.manifest if source is not None else None)
         self.rec = SessionRecorder(self.storage.directory, self.storage.session_id, cfg.participant_id, self.clock)
         self.primary = PrimaryText()
         self.secondary = SecondaryText()
