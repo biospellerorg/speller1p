@@ -1,0 +1,7 @@
+{
+    "p300_app_dir": "",
+    "top3_weights": [8, 3, 2],
+    "decision_wait_s": 10,
+    "epoch_wait_s": 30,
+    "poll_ms": 20
+}

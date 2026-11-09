@@ -125,6 +125,7 @@ uv run --no-sync python -m eeg_speller.external.server
 | `moving_letters` | короткое движение буквы в случайный момент |
 | `moving_circles` | кружок буквы пробегает по эллипсу |
 | `simulator` | без экрана: виртуальный испытуемый и симулированная ЭЭГ |
+| `p300_app_bridge` | внешняя программа P300-LLM: её экран, усилитель и декодер; спеллер получает вспышки и решения ([README](stimulus_kit/modules/p300_app_bridge/README.md)) |
 
 - **Модуль самостоятельный.** Клавиатуру (`alphabet`, `num_rows`, `num_cols`), фразу для подсказки цели при copy-spelling и калибровке (`sentence`), пробел вместо ЭЭГ, полный экран, времена и цвета задаёт его `settings.json`. Клавиатуру модуль сообщает спеллеру при подключении, и спеллер подстраивает под неё языковую модель.
 - **Свой модуль.** Положите папку с `main.py` (и, по желанию, `settings.json` и `module.json`) в `stimulus_kit/modules/`. Обязательных правил два: объявить клавиатуру в `SpellerLink(keyboard=…, layout=…)` и сразу после `flip` кадра со стимулом вызвать `link.flash([символы])`. Всё остальное — в [`stimulus_kit/CONTRACT.md`](stimulus_kit/CONTRACT.md).
