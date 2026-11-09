@@ -69,14 +69,30 @@ def likelihood_from_top3(top3: list[str], symbols: list[str], by_label: dict[str
 
 
 class EventsTail:
-    """Follow the newest ``session_*`` folder of p300_app and return new complete events."""
+    """Follow the newest ``session_*`` folder of p300_app and return new complete events.
 
-    def __init__(self, data_dir: Path, log=print):
+    What is already written when the module starts is history, not live input: the
+    session folder that exists at start is read from its current end. (LSL clocks
+    restart with the computer, so timestamps alone cannot tell old events from new.)
+    Session folders that appear later are read from the beginning.
+    """
+
+    def __init__(self, data_dir: Path, log=print, skip_existing: bool = True):
         self.data_dir = Path(data_dir)
         self.log = log
         self.session: Path | None = None
         self.offset = 0
         self.partial = b""
+        self.history: Path | None = None
+        if skip_existing:
+            self.history = self.newest_session()
+            if self.history is not None:
+                self.session = self.history
+                try:
+                    self.offset = (self.history / "events.jsonl").stat().st_size
+                except OSError:
+                    self.offset = 0
+                log(f"p300_app session {self.history.name} already exists: only new events are read")
 
     def newest_session(self) -> Path | None:
         if not self.data_dir.is_dir():

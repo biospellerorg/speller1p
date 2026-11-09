@@ -130,6 +130,19 @@ def test_missing_decision_and_interruption_send_unusable_evidence():
     assert link.calls[-1] == ("done", 2)
 
 
+def test_log_written_before_start_is_not_replayed(tmp_path):
+    """After a reboot LSL clocks restart, so an old log must be skipped by position, not time."""
+    old = tmp_path / "data" / "session_2026-11-08_10-00-00_000001"
+    old.mkdir(parents=True)
+    path = old / "events.jsonl"
+    path.write_text('{"event_type": "old", "payload": {"lsl_timestamp": 99999}}\n', encoding="utf-8")
+    tail = EventsTail(tmp_path / "data", log=lambda m: None)
+    assert tail.poll() == (None, [])
+    with path.open("a", encoding="utf-8") as f:
+        f.write('{"event_type": "new", "payload": {}}\n')
+    assert tail.poll() == (None, [("new", {})])
+
+
 def test_tail_follows_the_newest_session_and_partial_lines(tmp_path):
     tail = EventsTail(tmp_path / "data", log=lambda m: None)
     assert tail.poll() == (None, [])
